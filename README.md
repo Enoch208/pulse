@@ -12,29 +12,29 @@ $ pulse-replay session.feed
 replayed session.feed
   messages          1,000,801
   digests verified  800
-  throughput        11.65 M msg/s, 451.3 MB/s
+  throughput        11.06 M msg/s, 428.3 MB/s
   result            every book matched the engine's digests
 ```
 
 ## Results
 
-Measured with `scripts/measure.sh` on a 2 vCPU cloud VM (Intel Xeon @ 2.10 GHz, Linux, GCC 13.3, `-O3`). Every number below comes from one complete run of that script. On a shared VM, results move by 10 to 20% from run to run, so rerun it to measure your own machine.
+Measured with `scripts/measure.sh` on a 2 vCPU cloud VM (Intel Xeon @ 2.10 GHz, Linux, GCC 13.3, `-O3`). Each number below is the median of three complete runs of that script, because results on a shared VM move by 10 to 20% from run to run. Rerun it to measure your own machine.
 
 | What | Result |
 |---|---|
-| Stream decode (64 KiB reads) | 53.8 M msg/s, 2.1 GB/s, 18.6 ns per message |
-| Book apply, 8 instruments, digests included | 12.3 M msg/s, 82 ns per message mean |
-| Book apply per event, p50 / p99 | add 91 / 220 ns, execute 73 / 199 ns, delete 87 / 211 ns, replace 133 / 283 ns |
-| Full replay of a 1M message capture (decode, rebuild, 800 digest checks) | 11.7 M msg/s, 451 MB/s |
-| Order id lookup under churn, 1M live ids | 71 ns/op, against 242 ns/op for `std::unordered_map` |
-| Thread handoff, SPSC ring against `std::mutex` + `std::deque` | 6.3 ns/item against 147 ns/item |
-| Thread round trip through the ring, p50 / p99 | 467 / 643 ns (mutex: 1,727 / 12,735 ns) |
-| Live TCP at 100k msg/s, intended send to book applied, p50 / p90 | 7.3 / 31.6 µs |
-| Live TCP unpaced, sustained | 6.0 M msg/s into the books |
+| Stream decode (64 KiB reads) | 49.4 M msg/s, 1.9 GB/s, 20 ns per message |
+| Book apply, 8 instruments, digests included | 14.0 M msg/s, 71 ns per message mean |
+| Book apply per event, p50 / p99 | add 90 / 215 ns, execute 74 / 193 ns, delete 89 / 215 ns, replace 132 / 277 ns |
+| Full replay of a 1M message capture (decode, rebuild, 800 digest checks) | 11.1 M msg/s, 428 MB/s |
+| Order id lookup under churn, 1M live ids | 47 ns/op, against 139 ns/op for `std::unordered_map` |
+| Thread handoff, SPSC ring against a mutex-guarded ring of the same capacity | 5.7 ns/item against 195 ns/item |
+| Thread round trip through the ring, p50 / p99 | 461 / 619 ns (mutex ring: 1,583 / 11,711 ns) |
+| Live TCP at 100k msg/s, intended send to book applied, p50 / p90 | 5.6 / 30 µs |
+| Live TCP unpaced, sustained | 6.8 M msg/s into the books |
 
-Per-event latencies are timed one call at a time and include the 35 ns cost of reading the clock twice.
+Per-event latencies are timed one call at a time and include the 27 ns cost of reading the clock twice. Decode plus apply (20 + 71 ns) predicts the 11 M msg/s the full replay measures.
 
-The live p99 on this VM is about 1.4 ms. It is not a cost inside Pulse. The publisher, the network thread and the book thread are three runnable threads sharing two cores, so at the tail a thread is waiting for the scheduler. The in-process numbers above are what the handler itself costs. Run `scripts/measure.sh` on a machine with spare cores to see the live tail without that contention.
+The live p99 on this VM is about 1.4 ms, and it says more about where the test runs than about the book code. At 100k msg/s the feed server waits about 10 µs between frames, too short to sleep, so it yields in a loop, and the book thread also yields while its ring is empty. With the network thread that is three runnable threads on two cores, so at the tail one of them is waiting for the scheduler. With the publisher on another machine, or spare cores to pin threads to, those waits stop competing. The in-process rows are what the handler itself costs.
 
 ## Architecture
 
@@ -54,7 +54,7 @@ flowchart LR
   end
 ```
 
-The two halves share nothing except the wire format. The exchange side owns the truth: a matching engine fed by synthetic order flow. Every state change it makes goes out as a feed message, and at a fixed interval it publishes a digest of each book. The handler side rebuilds the books from those messages alone and compares its own digests with the published ones. If one field of one message is wrong, the next digest says so.
+The two halves share nothing except the wire format. The exchange side owns the truth: a matching engine fed by synthetic order flow. Every state change it makes goes out as a feed message, and at a fixed interval it publishes a digest of each book. The handler side rebuilds the books from those messages alone and compares its own digests with the published ones. If a message puts a wrong order, price, quantity, side or queue position into a book, the next digest says so.
 
 Inside the handler, the network thread reads from the socket, reassembles frames and decodes them. The book thread applies them. A lock-free single-producer, single-consumer ring sits between the two, so the book thread never touches a socket and never waits on a lock.
 
@@ -99,19 +99,19 @@ TCP delivers bytes, not frames, so a read can end anywhere, even inside the leng
 
 Orders and levels live in slabs: vectors addressed by 32-bit handles, with a LIFO free list. Memory is reserved up front, a freed slot is reused while it is still in cache, and an order is 24 bytes instead of a heap node with 8-byte pointers. Each price level keeps a doubly linked FIFO of its orders through those handles. Appending, removing an order from the middle of the queue and finding the front are all O(1).
 
-Prices on each side are a sorted vector with the best price at the back. Almost all activity happens at the top of the book, so the common cases are a new best price (`push_back`) and the best level emptying (`pop_back`). Anything deeper is a binary search and a short `memmove` of 16-byte entries. I chose this over `std::map` because a red-black tree spends its time chasing pointers through nodes scattered across the heap.
+Prices on each side are a sorted vector with the best price at the back. The best level empties all the time as orders trade and cancel, and removing it is a `pop_back`. New orders mostly land a few ticks behind the best price, so an insert is a binary search followed by a `memmove` of only the few 16-byte entries in front of it. I chose this over `std::map` because a red-black tree spends its time chasing pointers through nodes scattered across the heap. I also tried a special case for orders landing exactly at or through the best price, then measured that under 6% of adds in this flow do, and dropped it.
 
 ### Finding an order by id
 
-Every execute, cancel, delete and replace names an order by id, so this lookup sits on the hot path. `OrderIndex` is a flat array of 16-byte slots with linear probing and Fibonacci hashing, which spreads the dense, increasing ids an exchange assigns. Deletion shifts later entries back instead of leaving tombstones, so heavy churn never makes probes longer. Under churn with a million live ids it measures 71 ns per operation against 242 ns for `std::unordered_map`, which allocates a node per entry.
+Every execute, cancel, delete and replace names an order by id, so this lookup sits on the hot path. `OrderIndex` is a flat array of 16-byte slots with linear probing and Fibonacci hashing, which spreads the dense, increasing ids an exchange assigns. Deletion shifts later entries back instead of leaving tombstones, so heavy churn never makes probes longer. Under churn with a million live ids it measures 47 ns per operation against 139 ns for `std::unordered_map`, which allocates a node per entry. `add` takes the order slot first and lets the insert itself reject a duplicate id, so each add probes the index once.
 
 ### Proving the rebuild is exact
 
-The engine publishes a digest of each book every 10,000 messages. The digest walks both sides best price first and each queue in priority order, so two books digest equal only when they hold the same orders in the same queue positions. Digests are published only between engine steps, because one aggressive order can produce several events and the books are comparable only once all of them are out. A test changes one add order's price by a single tick, and the handler stops at the next digest.
+The engine publishes a digest of each book every 10,000 messages. The digest walks both sides best price first and each queue in priority order, so books that differ in any order, quantity or queue position get different digests, barring a 64-bit hash collision. Digests are published only between engine steps, because one aggressive order can produce several events and the books are comparable only once all of them are out. A test changes one add order's price by a single tick, and the handler stops at the next digest.
 
 ### Testing against a naive reference
 
-The interesting bugs in a matching engine are in priority: the wrong order filled first, or a replace that keeps a place in the queue it should lose. So the engine is checked against a reference that is too simple to be wrong. It scans every resting order to find the best one. 100,000 random requests go to both, and the events, the rejects and the final books must match exactly. The book gets the same treatment against a map of deques, and both comparisons also run under libFuzzer.
+The interesting bugs in a matching engine are in priority: the wrong order filled first, or a replace that keeps a place in the queue it should lose. So the engine is checked against a reference that is too simple to be wrong. It scans every resting order to find the best one. 100,000 random requests go to both, and the events, the rejects and the final books must match exactly. The book gets the same treatment against a map of deques, and that comparison also runs under libFuzzer.
 
 ### Reproducible order flow
 
@@ -119,7 +119,7 @@ The simulator uses `xoshiro256**` with rejection-sampled bounded draws, not `std
 
 ### Handing messages between threads
 
-The SPSC ring needs one release store to publish an item and one to free a slot, and no lock, so neither thread can be descheduled while holding something the other needs. The producer's and consumer's indices sit on separate 64-byte cache lines, and each side caches the other's index, reading the shared atomic only when the ring looks full or empty. Against a mutex-guarded deque it is 23 times cheaper per item and has a 20 times lower p99 round trip.
+The SPSC ring needs one release store to publish an item and one to free a slot, and no lock, so neither thread can be descheduled while holding something the other needs. The producer's and consumer's indices sit in separate 128-byte blocks. That is wide enough for Intel's prefetcher, which pulls cache lines in pairs, and for Apple's 128-byte lines. Each side also caches the other's index and reads the shared atomic only when the ring looks full or empty. Against a mutex-guarded ring of the same capacity it is about 34 times cheaper per item, with a p99 round trip about 19 times lower.
 
 ### Measuring latency honestly
 
@@ -155,9 +155,9 @@ As on ITCH-style feeds, the aggressor of a trade never appears unless part of it
 ## Correctness
 
 - The matching engine runs against a naive price-time reference across 100,000 random requests, the book against a map of deques across 50,000 operations, and the id index against `std::unordered_map` across 200,000.
-- `OrderBook::audit()` checks every link, total, count and ordering invariant, and the tests and fuzzers call it after every step.
+- `OrderBook::audit()` checks every link, total, count and ordering invariant. The fuzzers call it after every operation, and the randomized tests call it every few hundred steps and at the end.
 - A 50,000 message session is rebuilt through the encoder and decoder in uneven chunks, and every queue is compared with the engine's. Tests confirm that gaps, impossible events, a one-tick price change, wrong end counts and trailing messages are all caught.
-- libFuzzer targets with ASan and UBSan cover the stream decoder (chunking invariance and an exact re-encoding round trip) and the order book (against the reference, with an audit after every operation). CI fuzzes each for 60 seconds on every push.
+- libFuzzer targets with ASan and UBSan cover three things. The stream decoder must give the same result whatever the chunking and re-encode to exactly the input. The order book runs against the reference with an audit after every operation. The feed handler takes arbitrary decoded messages, with every book audited after each one. CI fuzzes each for 60 seconds on every push.
 - CI runs the whole suite under ASan with UBSan and under TSan, including a live TCP session through the two-thread client.
 - CI builds with warnings as errors on GCC and Clang on Ubuntu and on AppleClang on macOS. The feed fingerprint test proves the output is byte-identical everywhere.
 
@@ -205,6 +205,7 @@ scripts/measure.sh   reproduces every number in this README
 - The feed goes over TCP to one client. Real exchange feeds are UDP multicast, where a gap means lost packets and a request to a retransmission server. Pulse detects gaps but treats them as fatal. Gap recovery against a snapshot or replay channel is the natural next step.
 - The sockets are plain POSIX sockets with no kernel bypass, busy polling or thread pinning, so the live numbers include the kernel network stack and the scheduler.
 - One thread applies every book. Instruments are independent, so books could be sharded across threads by instrument id, one SPSC ring per shard. The protocol already carries the instrument on every message to make that routing cheap.
+- Digest checks run on the book thread and walk the whole book, about 8 µs at the median for roughly 1,600 orders, and that shows up in the live tail. A digest updated incrementally with each event, or checked on another thread from a snapshot, would take it off the hot path.
 - The order flow is synthetic: statistically plausible, not a real exchange's. Feeding a real ITCH capture through a translator would test the book against real queue dynamics.
 
 ## License
