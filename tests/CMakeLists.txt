@@ -8,7 +8,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Catch2)
 
 add_executable(pulse_tests
-  wire/byte_io_test.cpp)
+  wire/byte_io_test.cpp
+  wire/codec_test.cpp)
 target_link_libraries(pulse_tests PRIVATE pulse_core pulse_warnings Catch2::Catch2WithMain)
 
 include(Catch)
