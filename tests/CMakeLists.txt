@@ -15,6 +15,7 @@ add_executable(pulse_tests
   feed/feed_handler_test.cpp
   sim/order_flow_test.cpp
   sim/rng_test.cpp
+  stats/latency_histogram_test.cpp
   wire/byte_io_test.cpp
   wire/codec_test.cpp
   wire/stream_decoder_test.cpp)
