@@ -31,6 +31,7 @@ add_test(NAME capture_round_trip
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 add_test(NAME tcp_round_trip
-  COMMAND sh -c "\"$<TARGET_FILE:pulse-sim>\" --messages 200000 --instruments 4 --out tcp.feed && (\"$<TARGET_FILE:pulse-feed>\" tcp.feed --port 39117 --rate 500000 &) && \"$<TARGET_FILE:pulse-book>\" --port 39117"
+  COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tcp_round_trip.sh
+    $<TARGET_FILE:pulse-sim> $<TARGET_FILE:pulse-feed> $<TARGET_FILE:pulse-book>
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(tcp_round_trip PROPERTIES TIMEOUT 60)
