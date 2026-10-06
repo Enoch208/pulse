@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <stdexcept>
 
 namespace pulse::sim {
 namespace {
@@ -23,6 +24,9 @@ OrderFlow::OrderFlow(const FlowConfig& config)
     : rng_(config.seed),
       engine_(config.instruments, expected_orders_per_book),
       resting_(config.instruments) {
+  if (config.instruments == 0) {
+    throw std::invalid_argument("order flow needs at least one instrument");
+  }
   for (InstrumentId i = 0; i < config.instruments; ++i) {
     mids_.push_back(first_mid + mid_spacing * i);
   }

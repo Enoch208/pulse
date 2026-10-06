@@ -2,6 +2,7 @@
 
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <stdexcept>
 #include <vector>
 
 #include "pulse/book/digest.hpp"
@@ -70,4 +71,8 @@ TEST_CASE("a long session exercises every order event and keeps books bounded") 
     REQUIRE(book.best(Side::sell).has_value());
     CHECK(book.best(Side::buy)->price < book.best(Side::sell)->price);
   }
+}
+
+TEST_CASE("an order flow without instruments is refused") {
+  CHECK_THROWS_AS(OrderFlow({1, 0}), std::invalid_argument);
 }
