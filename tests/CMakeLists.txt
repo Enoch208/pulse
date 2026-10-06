@@ -12,6 +12,7 @@ add_executable(pulse_tests
   book/order_book_test.cpp
   book/order_index_test.cpp
   engine/matching_engine_test.cpp
+  sim/rng_test.cpp
   wire/byte_io_test.cpp
   wire/codec_test.cpp
   wire/stream_decoder_test.cpp)
