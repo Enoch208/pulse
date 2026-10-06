@@ -1,8 +1,10 @@
 #pragma once
 
+#include <bit>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <span>
 
 namespace pulse::wire {
@@ -22,8 +24,13 @@ class ByteWriter {
  private:
   template <std::unsigned_integral T>
   void put(T value) {
-    for (std::size_t i = 0; i < sizeof(T); ++i) {
-      out_[offset_ + i] = static_cast<std::byte>((value >> (8U * i)) & 0xFFU);
+    const std::span<std::byte> bytes = out_.subspan(offset_, sizeof(T));
+    if constexpr (std::endian::native == std::endian::little) {
+      std::memcpy(bytes.data(), &value, sizeof(T));
+    } else {
+      for (std::size_t i = 0; i < sizeof(T); ++i) {
+        bytes[i] = static_cast<std::byte>((value >> (8U * i)) & 0xFFU);
+      }
     }
     offset_ += sizeof(T);
   }
@@ -47,10 +54,14 @@ class ByteReader {
  private:
   template <std::unsigned_integral T>
   T read() {
+    const std::span<const std::byte> bytes = in_.subspan(offset_, sizeof(T));
     T value = 0;
-    for (std::size_t i = 0; i < sizeof(T); ++i) {
-      const auto byte = std::to_integer<T>(in_[offset_ + i]);
-      value = static_cast<T>(value | static_cast<T>(byte << (8U * i)));
+    if constexpr (std::endian::native == std::endian::little) {
+      std::memcpy(&value, bytes.data(), sizeof(T));
+    } else {
+      for (std::size_t i = 0; i < sizeof(T); ++i) {
+        value = static_cast<T>(value | static_cast<T>(std::to_integer<T>(bytes[i]) << (8U * i)));
+      }
     }
     offset_ += sizeof(T);
     return value;
