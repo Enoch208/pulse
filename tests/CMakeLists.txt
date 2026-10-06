@@ -8,6 +8,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Catch2)
 
 add_executable(pulse_tests
+  book/order_book_test.cpp
   book/order_index_test.cpp
   wire/byte_io_test.cpp
   wire/codec_test.cpp
