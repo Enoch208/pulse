@@ -29,6 +29,7 @@ target_compile_options(pulse_warnings INTERFACE
   -Wimplicit-fallthrough)
 
 add_subdirectory(src)
+add_subdirectory(apps)
 
 if(PROJECT_IS_TOP_LEVEL)
   include(CTest)

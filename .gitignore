@@ -5,3 +5,4 @@ crash-*
 leak-*
 timeout-*
 .DS_Store
+*.feed

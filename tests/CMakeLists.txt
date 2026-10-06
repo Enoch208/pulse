@@ -22,3 +22,7 @@ target_link_libraries(pulse_tests PRIVATE pulse_core pulse_warnings Catch2::Catc
 
 include(Catch)
 catch_discover_tests(pulse_tests DISCOVERY_MODE PRE_TEST)
+
+add_test(NAME capture_round_trip
+  COMMAND sh -c "\"$<TARGET_FILE:pulse-sim>\" --messages 200000 --instruments 4 --out round_trip.feed && \"$<TARGET_FILE:pulse-replay>\" round_trip.feed"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
