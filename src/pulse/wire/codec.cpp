@@ -173,4 +173,9 @@ DecodeResult decode(std::span<const std::byte> in, Message& out) {
   }
 }
 
+void restamp(std::span<std::byte> frame, Nanos timestamp) {
+  ByteWriter writer(frame.subspan(timestamp_offset, sizeof(Nanos)));
+  writer.put_u64(timestamp);
+}
+
 }

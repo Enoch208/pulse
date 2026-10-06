@@ -95,3 +95,15 @@ TEST_CASE("encoding into a buffer that is too small writes nothing") {
   CHECK(encode(message, buffer) == 0);
   CHECK(buffer == std::array<std::byte, header_size + 9>{});
 }
+
+TEST_CASE("restamping a frame changes only its timestamp") {
+  const Message original{5, 100, OrderExecuted{1, 2, 3, 4}};
+  std::vector<std::byte> frame = encoded(original);
+  restamp(frame, 987'654'321);
+
+  Message decoded{};
+  REQUIRE(decode(frame, decoded).status == DecodeStatus::ok);
+  Message expected = original;
+  expected.timestamp = 987'654'321;
+  CHECK(decoded == expected);
+}
