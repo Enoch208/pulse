@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string_view>
 #include <vector>
 
@@ -43,9 +44,9 @@ class FeedHandler {
   [[nodiscard]] const FeedStats& stats() const { return stats_; }
   [[nodiscard]] Sequence last_sequence() const { return last_sequence_; }
   [[nodiscard]] book::BookError last_book_error() const { return last_book_error_; }
-  [[nodiscard]] std::size_t instruments() const { return books_.size(); }
-  [[nodiscard]] const book::OrderBook& book(InstrumentId instrument) const {
-    return books_[instrument];
+  [[nodiscard]] std::size_t books_built() const { return books_built_; }
+  [[nodiscard]] const book::OrderBook* book(InstrumentId instrument) const {
+    return instrument < books_.size() ? books_[instrument].get() : nullptr;
   }
 
  private:
@@ -60,7 +61,8 @@ class FeedHandler {
   book::OrderBook* book_for(InstrumentId instrument);
   FeedError checked(book::BookError error, std::uint64_t& counter);
 
-  std::vector<book::OrderBook> books_;
+  std::vector<std::unique_ptr<book::OrderBook>> books_;
+  std::size_t books_built_ = 0;
   FeedStats stats_;
   Sequence last_sequence_ = 0;
   book::BookError last_book_error_ = book::BookError::none;

@@ -106,10 +106,15 @@ book::OrderBook* FeedHandler::book_for(InstrumentId instrument) {
   if (instrument >= max_instruments) {
     return nullptr;
   }
-  while (books_.size() <= instrument) {
-    books_.emplace_back(expected_orders_per_book);
+  if (books_.size() <= instrument) {
+    books_.resize(std::size_t{instrument} + 1);
   }
-  return &books_[instrument];
+  std::unique_ptr<book::OrderBook>& book = books_[instrument];
+  if (!book) {
+    book = std::make_unique<book::OrderBook>(expected_orders_per_book);
+    ++books_built_;
+  }
+  return book.get();
 }
 
 FeedError FeedHandler::checked(book::BookError error, std::uint64_t& counter) {

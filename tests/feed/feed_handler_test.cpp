@@ -55,9 +55,10 @@ TEST_CASE("a handler rebuilds every book the engine holds") {
   CHECK(handler.finished());
   CHECK(handler.stats().messages == session.messages.size());
   CHECK(handler.stats().digests_verified >= 50 * instruments);
-  REQUIRE(handler.instruments() == instruments);
+  REQUIRE(handler.books_built() == instruments);
   for (InstrumentId i = 0; i < instruments; ++i) {
-    CHECK(test::snapshot(handler.book(i)) == test::snapshot(session.flow.engine().book(i)));
+    REQUIRE(handler.book(i) != nullptr);
+    CHECK(test::snapshot(*handler.book(i)) == test::snapshot(session.flow.engine().book(i)));
   }
 }
 
@@ -127,6 +128,16 @@ TEST_CASE("the session must end with the right count and nothing after it") {
     FeedHandler handler;
     CHECK(replay(handler, session.messages) == FeedError::message_after_end);
   }
+}
+
+TEST_CASE("only instruments that appear on the feed get a book") {
+  FeedHandler handler;
+  const InstrumentId far = FeedHandler::max_instruments - 1;
+  REQUIRE(handler.on_message({1, 0, wire::AddOrder{far, 1, Side::buy, 100, 5}}) == FeedError::none);
+  CHECK(handler.books_built() == 1);
+  CHECK(handler.book(0) == nullptr);
+  REQUIRE(handler.book(far) != nullptr);
+  CHECK(handler.book(far)->order_count() == 1);
 }
 
 TEST_CASE("instrument ids beyond the supported range are refused") {
