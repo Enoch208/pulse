@@ -87,6 +87,9 @@ class OrderBook {
     Side side;
   };
 
+  static_assert(sizeof(Order) == 24);
+  static_assert(sizeof(Level) == 32);
+
   [[nodiscard]] const PriceLadder& ladder(Side side) const;
   [[nodiscard]] PriceLadder& ladder(Side side);
   [[nodiscard]] LevelView view(Handle level) const;
