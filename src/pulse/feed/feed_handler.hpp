@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 #include "pulse/book/order_book.hpp"
@@ -18,6 +19,8 @@ enum class FeedError : std::uint8_t {
   wrong_message_count,
   message_after_end,
 };
+
+[[nodiscard]] std::string_view describe(FeedError error);
 
 struct FeedStats {
   std::uint64_t messages = 0;

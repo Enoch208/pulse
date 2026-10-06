@@ -1,4 +1,3 @@
-#include <array>
 #include <chrono>
 #include <cstdio>
 #include <exception>
@@ -15,19 +14,6 @@ using namespace pulse;
 namespace {
 
 constexpr const char* usage = "usage: pulse-replay FILE\n";
-
-std::string_view describe(feed::FeedError error) {
-  constexpr std::array<std::string_view, 7> names = {
-      "ok",
-      "sequence gap",
-      "unknown instrument",
-      "book rejected an event",
-      "book digest mismatch",
-      "wrong message count at end of session",
-      "message after end of session",
-  };
-  return names[static_cast<std::size_t>(error)];
-}
 
 void report(const std::string& path, std::size_t bytes, const feed::FeedStats& stats,
             double seconds) {
@@ -77,7 +63,7 @@ int run(const apps::Args& args) {
     throw std::runtime_error(std::format("malformed frame at byte {}", decoder.consumed_bytes()));
   }
   if (error != feed::FeedError::none) {
-    throw std::runtime_error(std::format("{} at sequence {}", describe(error), failed_at));
+    throw std::runtime_error(std::format("{} at sequence {}", feed::describe(error), failed_at));
   }
   if (!handler.finished() || decoder.buffered_bytes() != 0) {
     throw std::runtime_error("capture ends before the end of the session");

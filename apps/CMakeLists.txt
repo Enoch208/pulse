@@ -1,4 +1,4 @@
-foreach(app pulse_sim pulse_replay)
+foreach(app pulse_sim pulse_replay pulse_feed pulse_book)
   string(REPLACE "_" "-" binary ${app})
   add_executable(${binary} ${app}.cpp)
   target_link_libraries(${binary} PRIVATE pulse_core pulse_warnings)

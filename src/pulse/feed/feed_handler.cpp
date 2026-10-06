@@ -1,5 +1,6 @@
 #include "pulse/feed/feed_handler.hpp"
 
+#include <array>
 #include <variant>
 
 #include "pulse/book/digest.hpp"
@@ -9,6 +10,19 @@ namespace {
 
 constexpr std::size_t expected_orders_per_book = 4096;
 
+}
+
+std::string_view describe(FeedError error) {
+  constexpr std::array<std::string_view, 7> names = {
+      "no error",
+      "sequence gap",
+      "unknown instrument",
+      "book rejected an event",
+      "book digest mismatch",
+      "wrong message count at end of session",
+      "message after end of session",
+  };
+  return names[static_cast<std::size_t>(error)];
 }
 
 FeedError FeedHandler::on_message(const wire::Message& message) {

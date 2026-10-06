@@ -29,3 +29,8 @@ catch_discover_tests(pulse_tests DISCOVERY_MODE PRE_TEST)
 add_test(NAME capture_round_trip
   COMMAND sh -c "\"$<TARGET_FILE:pulse-sim>\" --messages 200000 --instruments 4 --out round_trip.feed && \"$<TARGET_FILE:pulse-replay>\" round_trip.feed"
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+add_test(NAME tcp_round_trip
+  COMMAND sh -c "\"$<TARGET_FILE:pulse-sim>\" --messages 200000 --instruments 4 --out tcp.feed && (\"$<TARGET_FILE:pulse-feed>\" tcp.feed --port 39117 --rate 500000 &) && \"$<TARGET_FILE:pulse-book>\" --port 39117"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(tcp_round_trip PROPERTIES TIMEOUT 60)
