@@ -1,4 +1,5 @@
 add_library(pulse_core STATIC
+  pulse/book/digest.cpp
   pulse/book/order_book.cpp
   pulse/book/order_book_audit.cpp
   pulse/book/order_index.cpp
