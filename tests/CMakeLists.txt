@@ -13,6 +13,7 @@ add_executable(pulse_tests
   book/order_index_test.cpp
   engine/matching_engine_test.cpp
   feed/feed_handler_test.cpp
+  pipeline/spsc_ring_test.cpp
   sim/order_flow_test.cpp
   sim/rng_test.cpp
   stats/latency_histogram_test.cpp
