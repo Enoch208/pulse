@@ -1,8 +1,8 @@
 #include <condition_variable>
-#include <deque>
 #include <format>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 #include "harness.hpp"
 #include "pulse/pipeline/spsc_ring.hpp"
@@ -14,27 +14,36 @@ namespace {
 constexpr std::uint64_t items = 20'000'000;
 constexpr int round_trips = 200'000;
 
-class MutexQueue {
+class LockedRing {
  public:
+  explicit LockedRing(std::size_t capacity) : slots_(capacity) {}
+
   bool try_push(std::uint64_t item) {
     const std::scoped_lock lock(mutex_);
-    items_.push_back(item);
+    if (size_ == slots_.size()) {
+      return false;
+    }
+    slots_[(head_ + size_) % slots_.size()] = item;
+    ++size_;
     return true;
   }
 
   bool try_pop(std::uint64_t& item) {
     const std::scoped_lock lock(mutex_);
-    if (items_.empty()) {
+    if (size_ == 0) {
       return false;
     }
-    item = items_.front();
-    items_.pop_front();
+    item = slots_[head_];
+    head_ = (head_ + 1) % slots_.size();
+    --size_;
     return true;
   }
 
  private:
   std::mutex mutex_;
-  std::deque<std::uint64_t> items_;
+  std::vector<std::uint64_t> slots_;
+  std::size_t head_ = 0;
+  std::size_t size_ = 0;
 };
 
 template <typename Queue>
@@ -89,20 +98,21 @@ stats::LatencyHistogram ping_pong(Queue& there, Queue& back) {
 }
 
 int main() {
-  pipeline::SpscRing<std::uint64_t> ring(65'536);
-  MutexQueue locked;
+  constexpr std::size_t capacity = 65'536;
+  pipeline::SpscRing<std::uint64_t> ring(capacity);
+  LockedRing locked(capacity);
   const double ring_ns = transfer(ring);
   const double locked_ns = transfer(locked);
   bench::print(
       std::format("two-thread transfer of {} items\n"
                   "  SpscRing                  {:.1f} ns/item\n"
-                  "  std::mutex + std::deque   {:.1f} ns/item\n",
+                  "  std::mutex ring           {:.1f} ns/item\n",
                   items, ring_ns, locked_ns));
 
   pipeline::SpscRing<std::uint64_t> there(64);
   pipeline::SpscRing<std::uint64_t> back(64);
-  MutexQueue locked_there;
-  MutexQueue locked_back;
+  LockedRing locked_there(64);
+  LockedRing locked_back(64);
   bench::print(std::format("round trip between two threads, {} pings\n", round_trips));
   bench::print(bench::row("SpscRing", ping_pong(there, back)));
   bench::print(bench::row("mutex", ping_pong(locked_there, locked_back)));
