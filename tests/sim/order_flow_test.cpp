@@ -23,7 +23,7 @@ std::vector<wire::Body> run(const FlowConfig& config, int steps) {
 }
 
 std::uint64_t fingerprint(const std::vector<wire::Body>& events) {
-  book::Fnv1a hash;
+  book::Hasher hash;
   std::array<std::byte, wire::max_frame_size> frame{};
   Sequence sequence = 0;
   for (const wire::Body& body : events) {
@@ -44,7 +44,7 @@ TEST_CASE("the same seed produces the same feed") {
 
 TEST_CASE("the feed is identical on every compiler and platform") {
   const std::vector<wire::Body> events = run({1, 4}, 20'000);
-  CHECK(fingerprint(events) == 0x38FB2D2096D3A7BFULL);
+  CHECK(fingerprint(events) == 0x4E985EE64868AC7AULL);
 }
 
 TEST_CASE("a long session exercises every order event and keeps books bounded") {

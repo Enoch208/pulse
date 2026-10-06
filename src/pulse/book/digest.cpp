@@ -3,7 +3,7 @@
 namespace pulse::book {
 
 std::uint64_t digest(const OrderBook& book) {
-  Fnv1a hash;
+  Hasher hash;
   for (const Side side : {Side::buy, Side::sell}) {
     std::uint64_t orders = 0;
     hash.add(static_cast<std::uint64_t>(side));
