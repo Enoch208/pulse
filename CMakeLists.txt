@@ -30,6 +30,7 @@ target_compile_options(pulse_warnings INTERFACE
 
 add_subdirectory(src)
 add_subdirectory(apps)
+add_subdirectory(bench)
 
 if(PROJECT_IS_TOP_LEVEL)
   include(CTest)
