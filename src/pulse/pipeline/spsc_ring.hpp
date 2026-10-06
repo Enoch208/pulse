@@ -9,7 +9,7 @@
 
 namespace pulse::pipeline {
 
-inline constexpr std::size_t cache_line = 64;
+inline constexpr std::size_t false_sharing_range = 128;
 
 template <typename T>
 class SpscRing {
@@ -49,12 +49,12 @@ class SpscRing {
   [[nodiscard]] std::size_t capacity() const { return mask_ + 1; }
 
  private:
-  struct alignas(cache_line) ProducerSide {
+  struct alignas(false_sharing_range) ProducerSide {
     std::atomic<std::size_t> tail{0};
     std::size_t cached_head = 0;
   };
 
-  struct alignas(cache_line) ConsumerSide {
+  struct alignas(false_sharing_range) ConsumerSide {
     std::atomic<std::size_t> head{0};
     std::size_t cached_tail = 0;
   };
