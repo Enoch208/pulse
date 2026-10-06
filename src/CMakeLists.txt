@@ -5,6 +5,7 @@ add_library(pulse_core STATIC
   pulse/book/order_index.cpp
   pulse/book/price_ladder.cpp
   pulse/engine/matching_engine.cpp
+  pulse/sim/order_flow.cpp
   pulse/wire/codec.cpp)
 target_include_directories(pulse_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(pulse_core PUBLIC cxx_std_20)
