@@ -84,6 +84,10 @@ TEST_CASE("the rebuild survives encoding and arbitrary chunking") {
   }
   CHECK(error == FeedError::none);
   CHECK(handler.finished());
+  for (InstrumentId i = 0; i < instruments; ++i) {
+    REQUIRE(handler.book(i) != nullptr);
+    CHECK(test::snapshot(*handler.book(i)) == test::snapshot(session.flow.engine().book(i)));
+  }
 }
 
 TEST_CASE("a missing message is reported as a gap") {

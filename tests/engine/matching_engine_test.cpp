@@ -146,4 +146,8 @@ TEST_CASE("random request streams match a naive price-time reference exactly") {
       }
     }
   }
+  for (InstrumentId i = 0; i < instruments; ++i) {
+    CHECK(test::snapshot(engine.book(i)) == reference.snapshot(i));
+    CHECK_FALSE(engine.book(i).audit().has_value());
+  }
 }
