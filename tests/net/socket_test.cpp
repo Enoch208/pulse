@@ -1,6 +1,7 @@
 #include "pulse/net/socket.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
 #include <system_error>
 #include <thread>
 #include <vector>
@@ -46,4 +47,23 @@ TEST_CASE("connecting to a port nobody listens on fails loudly") {
     port = local_port(listener);
   }
   CHECK_THROWS_AS(connect_to("127.0.0.1", port), std::system_error);
+}
+
+TEST_CASE("a read with a timeout returns empty-handed when nothing arrives") {
+  const Socket listener = listen_on("127.0.0.1", 0);
+  const Socket client = connect_to("127.0.0.1", local_port(listener));
+  const Socket server = accept_from(listener);
+  server.set_receive_timeout(std::chrono::milliseconds(50));
+
+  std::vector<std::byte> buffer(16);
+  const auto start = std::chrono::steady_clock::now();
+  CHECK_FALSE(server.try_read(buffer).has_value());
+  const auto waited = std::chrono::steady_clock::now() - start;
+  CHECK(waited >= std::chrono::milliseconds(40));
+  CHECK(waited < std::chrono::seconds(2));
+
+  client.write_all(std::span(buffer).first(3));
+  CHECK(server.try_read(buffer) == std::optional<std::size_t>(3));
+  client.finish_writing();
+  CHECK(server.try_read(buffer) == std::optional<std::size_t>(0));
 }

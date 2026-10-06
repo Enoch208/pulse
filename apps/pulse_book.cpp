@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <exception>
 #include <format>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -23,6 +24,7 @@ namespace {
 constexpr const char* usage = "usage: pulse-book [--host ADDRESS] [--port N] [--ring SLOTS]\n";
 constexpr std::size_t read_size = 64 * 1024;
 constexpr int connect_attempts = 50;
+constexpr std::chrono::milliseconds stop_check_interval(100);
 
 struct Shared {
   explicit Shared(std::size_t slots) : ring(slots) {}
@@ -64,11 +66,14 @@ void receive(const net::Socket& socket, Shared& shared) {
       }
     };
     while (!shared.stop.load(std::memory_order_relaxed)) {
-      const std::size_t received = socket.read_some(buffer);
-      if (received == 0) {
+      const std::optional<std::size_t> received = socket.try_read(buffer);
+      if (!received) {
+        continue;
+      }
+      if (*received == 0) {
         break;
       }
-      if (decoder.feed(std::span(buffer).first(received), forward) != wire::DecodeStatus::ok) {
+      if (decoder.feed(std::span(buffer).first(*received), forward) != wire::DecodeStatus::ok) {
         shared.network_error = std::format("malformed frame at byte {}", decoder.consumed_bytes());
         break;
       }
@@ -78,6 +83,22 @@ void receive(const net::Socket& socket, Shared& shared) {
   }
   shared.network_done.store(true, std::memory_order_release);
 }
+
+class NetworkThread {
+ public:
+  NetworkThread(const net::Socket& socket, Shared& shared)
+      : shared_(shared), thread_([&socket, &shared] { receive(socket, shared); }) {}
+  ~NetworkThread() {
+    shared_.stop.store(true, std::memory_order_relaxed);
+    thread_.join();
+  }
+  NetworkThread(const NetworkThread&) = delete;
+  NetworkThread& operator=(const NetworkThread&) = delete;
+
+ private:
+  Shared& shared_;
+  std::thread thread_;
+};
 
 bool next_message(Shared& shared, wire::Message& message) {
   while (!shared.ring.try_pop(message)) {
@@ -141,11 +162,13 @@ int run(const apps::Args& args) {
   }
   Shared shared(args.number("ring", 65'536));
   const net::Socket socket = connect_with_retry(host, static_cast<std::uint16_t>(port));
+  socket.set_receive_timeout(stop_check_interval);
   feed::FeedHandler handler;
 
-  std::thread network([&] { receive(socket, shared); });
-  const Consumed consumed = consume(shared, handler);
-  network.join();
+  const Consumed consumed = [&] {
+    const NetworkThread network(socket, shared);
+    return consume(shared, handler);
+  }();
 
   if (consumed.error != feed::FeedError::none) {
     throw std::runtime_error(

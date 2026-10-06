@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <array>
@@ -87,13 +88,35 @@ Socket& Socket::operator=(Socket&& other) noexcept {
 
 std::size_t Socket::read_some(std::span<std::byte> buffer) const {
   while (true) {
+    if (const std::optional<std::size_t> received = try_read(buffer)) {
+      return *received;
+    }
+  }
+}
+
+std::optional<std::size_t> Socket::try_read(std::span<std::byte> buffer) const {
+  while (true) {
     const ssize_t received = ::recv(fd_, buffer.data(), buffer.size(), 0);
     if (received >= 0) {
       return static_cast<std::size_t>(received);
     }
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      return std::nullopt;
+    }
     if (errno != EINTR) {
       fail("recv");
     }
+  }
+}
+
+void Socket::set_receive_timeout(std::chrono::milliseconds timeout) const {
+  const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);
+  const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(timeout - seconds);
+  timeval limit{};
+  limit.tv_sec = static_cast<decltype(limit.tv_sec)>(seconds.count());
+  limit.tv_usec = static_cast<decltype(limit.tv_usec)>(micros.count());
+  if (::setsockopt(fd_, SOL_SOCKET, SO_RCVTIMEO, &limit, sizeof(limit)) != 0) {
+    fail("setsockopt SO_RCVTIMEO");
   }
 }
 

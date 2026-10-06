@@ -1,7 +1,9 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 
@@ -18,6 +20,8 @@ class Socket {
   Socket& operator=(const Socket&) = delete;
 
   [[nodiscard]] std::size_t read_some(std::span<std::byte> buffer) const;
+  [[nodiscard]] std::optional<std::size_t> try_read(std::span<std::byte> buffer) const;
+  void set_receive_timeout(std::chrono::milliseconds timeout) const;
   void write_all(std::span<const std::byte> bytes) const;
   void finish_writing() const;
 
