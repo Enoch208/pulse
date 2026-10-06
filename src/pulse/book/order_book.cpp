@@ -12,13 +12,14 @@ BookError OrderBook::add(OrderId id, Side side, Price price, Quantity quantity) 
   if (quantity == 0) {
     return BookError::zero_quantity;
   }
-  if (index_.find(id) != null_handle) {
+  const Handle order = orders_.acquire(Order{id, quantity, null_handle, null_handle, null_handle});
+  if (!index_.insert(id, order)) {
+    orders_.release(order);
     return BookError::duplicate_order_id;
   }
   const Handle level = level_for(side, price);
-  const Handle order = orders_.acquire(Order{id, quantity, level, null_handle, null_handle});
+  orders_[order].level = level;
   append(level, order);
-  index_.insert(id, order);
   return BookError::none;
 }
 
