@@ -7,6 +7,7 @@ add_library(pulse_core STATIC
   pulse/engine/matching_engine.cpp
   pulse/feed/feed_handler.cpp
   pulse/io/capture.cpp
+  pulse/net/socket.cpp
   pulse/sim/order_flow.cpp
   pulse/stats/latency_histogram.cpp
   pulse/wire/codec.cpp)
