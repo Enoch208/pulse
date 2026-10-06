@@ -1,0 +1,7 @@
+build/
+.cache/
+compile_commands.json
+crash-*
+leak-*
+timeout-*
+.DS_Store
