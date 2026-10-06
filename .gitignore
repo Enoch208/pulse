@@ -6,3 +6,4 @@ leak-*
 timeout-*
 .DS_Store
 *.feed
+corpus/

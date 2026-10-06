@@ -61,6 +61,27 @@ jobs:
       - name: Test
         run: ctest --preset ${{ matrix.preset }}
 
+  fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Lower mmap randomisation for sanitizer shadow memory
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Configure
+        run: cmake --preset fuzz -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+      - name: Build
+        run: cmake --build --preset fuzz --parallel
+      - name: Fuzz the stream decoder for 60 seconds
+        run: |
+          mkdir -p corpus/decoder
+          build/fuzz/fuzz/fuzz_stream_decoder corpus/decoder -max_total_time=60
+      - name: Fuzz the order book for 60 seconds
+        run: |
+          mkdir -p corpus/book
+          build/fuzz/fuzz/fuzz_order_book corpus/book -max_total_time=60
+
   format:
     runs-on: ubuntu-24.04
     timeout-minutes: 5

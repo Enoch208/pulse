@@ -28,9 +28,15 @@ target_compile_options(pulse_warnings INTERFACE
   -Wformat=2
   -Wimplicit-fallthrough)
 
+option(PULSE_BUILD_FUZZERS "Build libFuzzer targets (Clang only)" OFF)
+
 add_subdirectory(src)
 add_subdirectory(apps)
 add_subdirectory(bench)
+
+if(PULSE_BUILD_FUZZERS)
+  add_subdirectory(fuzz)
+endif()
 
 if(PROJECT_IS_TOP_LEVEL)
   include(CTest)

@@ -1,0 +1,6 @@
+foreach(fuzzer fuzz_stream_decoder fuzz_order_book)
+  add_executable(${fuzzer} ${fuzzer}.cpp)
+  target_link_libraries(${fuzzer} PRIVATE pulse_core pulse_warnings)
+  target_compile_options(${fuzzer} PRIVATE -fsanitize=fuzzer)
+  target_link_options(${fuzzer} PRIVATE -fsanitize=fuzzer)
+endforeach()
